@@ -1,7 +1,7 @@
 import sys
 from google.cloud import bigquery
 
-def set_permissions_for_service_account(service_account_email, datasets, project_id='replica-customer'):
+def set_permissions_for_user(user_email, datasets, project_id='replica-customer'):
     # Initialize the BigQuery client
     client = bigquery.Client()
 
@@ -10,13 +10,13 @@ def set_permissions_for_service_account(service_account_email, datasets, project
 
         dataset = client.get_dataset(dataset_ref)
 
-        # Add a new access entry for the service account
+        # Add a new access entry for the user
         access_entries = dataset.access_entries
         access_entries.append(
             bigquery.AccessEntry(
                 role='READER',
-                entity_type='serviceAccount',
-                entity_id=service_account_email
+                entity_type='userByEmail',
+                entity_id=user_email
             )
         )
 
@@ -24,19 +24,19 @@ def set_permissions_for_service_account(service_account_email, datasets, project
         dataset.access_entries = access_entries
         client.update_dataset(dataset, ['access_entries'])
 
-        print(f'Permissions set for dataset: {dataset_id} for service account: {service_account_email}')
+        print(f'Permissions set for dataset: {dataset_id} for user: {user_email}')
 
-    print('Dataset-level permissions have been set for the service account.')
+    print('Dataset-level permissions have been set for the user.')
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        print("Usage: python script.py <service_account_email>")
+        print("Usage: python script.py <user_email>")
         sys.exit(1)
 
-    service_account_email = sys.argv[1]
+    user_email = sys.argv[1]
 
     datasets = ['cal_nev', 'hawaii', 'great_lakes', 'north_atlantic', 'north_central',
                 'northeast', 'northwest', 'mid_atlantic', 'south_atlantic',
                 'south_central', 'southwest', 'Geos', 'reference']
 
-    set_permissions_for_service_account(service_account_email, datasets)
+    set_permissions_for_user(user_email, datasets)
