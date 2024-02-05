@@ -8,13 +8,15 @@ import os
 import math
 from difflib import SequenceMatcher
 import re
-import unicodedata
-import numpy as np
 import argparse
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Process geospatial data.")
     parser.add_argument("mainfold", help="Path to the main folder")
+    parser.add_argument("--use_pavement", default="use_pavement.gpkg", 
+                        help="Input file for pavement data")
+    parser.add_argument("--base_streets", default="base_streets.gpkg", 
+                        help="Input file for base streets data")
     parser.add_argument("target_length", type=float, help="Target length")
     parser.add_argument("max_dist", type=float, help="Maximum distance")
     return parser.parse_args()
@@ -88,16 +90,6 @@ def remove_suffix_and_prefix(text, prefixes, suffixes):
     text = re.sub(pattern, '', text, flags=re.IGNORECASE).strip()
     return text
 
-def conv_cols(df, cols):
-    for c in cols:
-        df[c] = df[c].fillna('').str.upper().str.strip().apply(lambda x: \
-            unicodedata.normalize('NFKD', x).\
-                encode('ASCII', 'ignore').decode())
-        df[c] = df[c].apply(remove_suffix_and_prefix,
-                            prefixes=prefixes,
-                            suffixes=suffixes)
-    return df
-
 def similar(a, b):
     return SequenceMatcher(None, a, b).ratio()
 
@@ -127,6 +119,13 @@ def lev_dist(a, b):
     # Return the final distance
     return distances[m][n]
 
+def save_and_print_results(comps, mainfold, id_col):
+    comps.sort_values(id_col, ascending=True, inplace=True)
+    print(comps.iloc[3])
+    comps.to_csv(os.path.join(mainfold, 
+                              'comparison_first_draft.csv'), 
+                              index=False)
+
 def lev_sim(s1, s2):
     # Calculate the Levenshtein distance
     distance = lev_dist(s1, s2)
@@ -139,9 +138,8 @@ def main():
     mainfold = args.mainfold
     target_length = args.target_length
     max_dist = args.max_dist
-
-    infile = 'use_pavement.gpkg'
-    insts = 'base_streets.gpkg'
+    infile = args.use_pavement
+    insts = args.base_streets
 
     usepave = os.path.join(mainfold, infile)
     base_sts = os.path.join(mainfold, insts)
@@ -262,7 +260,6 @@ def main():
                         on=id_col,
                         how='left')
 
-    na_df = merged_df.loc[merged_df['stableEdgeId'].isna()]
     merged_df = merged_df.loc[~merged_df['stableEdgeId'].isna()]
 
     suffixes = ['Street', 'St', 'Terrace', 'Ter', 'Court', 'Ct', 'Place',
@@ -291,8 +288,12 @@ def main():
 
     street_cols = [c for c in keeps if 'STREET' in c.upper() \
                 or 'NAME' in c.upper()]
-
-    #merged_df = conv_cols(merged_df, street_cols)
+    
+    if not street_cols:
+        print("No 'STREET' or 'NAME' columns found. Skipping street-related operations.")
+        comps = merged_df.copy()
+        save_and_print_results(comps, mainfold, id_col)
+        return 
 
     merged_df[street_cols] = merged_df[street_cols].\
         map(lambda x: numbermap.get(x, x))
@@ -329,12 +330,7 @@ def main():
     for f in floats:
         comps[f] = comps[f].round(4)
 
-    comps.sort_values(id_col, ascending=True, inplace=True)
-
-    print(comps.iloc[3])
-
-    comps.to_csv(os.path.join(mainfold, 'comparison_first_draft.csv'),
-                index=False)
+    save_and_print_results(comps, mainfold, id_col)
 
 if __name__ == "__main__":
     main()
